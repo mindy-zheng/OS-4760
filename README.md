@@ -1,2 +1,4 @@
 # OS-4760
-Project 3 of OS 
+Mindy Zheng
+
+This is project 3 for CS 4760. 
