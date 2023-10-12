@@ -13,7 +13,6 @@
 // Message queue struct
 typedef struct msgbuffer {
     long mtype;
-    char strData[100];
     int intData;
 } msgbuffer;
 
@@ -42,7 +41,7 @@ int main(int argc, char** argv) {
 	} 
 	
 	msgbuffer buf; 
-	buf.mtype = 1; 
+	buf.mtype = 1;  
 	int msgid = 0; 
 	key_t msgkey; 
 
@@ -58,19 +57,52 @@ int main(int argc, char** argv) {
 	}
 
 	
-	printf("Child %d has access to the queue\n",getpid());
+	// printf("Child %d has access to the queue\n",getpid());
 	
 
-//	printf("Seconds: %s, Nanoseconds: %s\n", argv[1], argv[2]); // Making sure exec works 
-	int t_seconds = atoi(argv[1]);
-	int t_nanoseconds = atoi(argv[2]); 
-	if (clock_ptr->seconds > t_seconds || (clock_ptr->seconds == t_seconds && clock_ptr->nanoseconds >= t_nanoseconds)) { 
-		printf("Termination time reached: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
-        exit(EXIT_SUCCESS);  // Terminate the process with a success status
-    } else { 
-		printf("Termination code not meeting"); 
-	} 
+	//	printf("Seconds: %s, Nanoseconds: %s\n", argv[1], argv[2]); // Making sure exec works 
 
+	int t_seconds = atoi(argv[1]) + clock_ptr-> seconds; 
+	int t_nanoseconds = atoi(argv[2]) + clock_ptr-> nanoseconds;
+	int elapsed_seconds = 0;  
+	int start_seconds = clock_ptr -> seconds; 
+
+	while (1) { 
+		printf("WORKER: About to receive a message from parent %d.\n", getpid());  // Print statement before msgrcv() 
+		if (msgrcv(msgid, &buf, sizeof(msgbuffer), getpid(), 0) == -1) { 
+			perror("msgrcv failure"); 
+			exit(1); 
+		} 
+	    printf("Child %d has recieved message: %d\n", getpid(), buf.intData);
+		printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
+		printf("--Received message\n");
+		printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
+		printf("Termination time: %d seconds, %d nanoseconds\n", t_seconds, t_nanoseconds);
+		
+		if (clock_ptr->seconds > t_seconds || (clock_ptr->seconds== t_seconds && clock_ptr->nanoseconds >= t_nanoseconds)) { 
+			buf.intData = 0; 
+			printf("Terminating....\n"); 
+			break; 
+		} else { 
+			buf.intData = 1; 
+			printf("Continuing...\n");  
+		}  
+
+		buf.mtype = getppid(); // send Parent PID
+		printf("About to send a message to parent %ld.\n", buf.mtype); 
+    	if (msgsnd(msgid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) {
+        	perror("msgsnd");
+        	exit(1);
+    	} 
+		printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
+
+		if (clock_ptr->seconds - start_seconds > elapsed_seconds) {
+        	elapsed_seconds = clock_ptr->seconds - start_seconds;
+        	printf("WORKER PID:%d PPID:%d SysClockS: %d SysclockNano: %d TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), clock_ptr->seconds, clock_ptr->nanoseconds, t_seconds, t_nanoseconds);
+        	printf("--%d seconds have passed since starting\n", elapsed_seconds);
+    	}
+	}
+	
 
 	//Detatching from shared memory space
 	if (shmdt(clock_ptr) == -1) { 

@@ -20,4 +20,22 @@ I have created a function to displ ay the PCB table. So right now, I have the ge
 
 I have now successfully set up and implemented the message queues in both programs. From here, I'll work on the logic and then make sure I have functionality for the logfile command argument.  
 
+10/12 - I have run into a problem. I've kept up with the debugging statements so I can trace what's happening, but I'm a bit confused. Here is the last run for picking up where I left off. 
+zheng@opsys:~/zheng.3$ ./oss -n 6 -s 2 -t 5
+Prepping to fork...
+Child process created: 3345386. Total processes: 1. Running processes: 1.
+About to send a message to child 3345386.
+OSS send message 1 to child: 3345386
+WORKER: About to receive a message from parent 3345386.
+Child 3345386 has recieved message: 1
+WORKER PID:3345386 PPID:3345380 Called with oss: TermTimeS: 2 TermTimeNano: 494897100
+--Received message
+Current time: 0 seconds, 10000000 nanoseconds
+Termination time: 2 seconds, 494897100 nanoseconds
+Continuing...
+About to send a message to parent 3345380.
+Successfully sent message to parent 3345380.
+:WORKER: About to receive a message from parent 3345386.
+Prepping to receive a message from child 3345386.
+^C
 
