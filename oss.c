@@ -8,6 +8,16 @@
 #include <sys/shm.h>
 #include <time.h>
 #include <stdbool.h>
+#include <sys/msg.h>
+
+// Message queue struct 
+typedef struct msgbuffer { 
+	long mtype; 
+	char strData[100]; 
+	int intData; 
+} msgbuffer; 
+
+#define PERMS 0644
 
 // Process Control Block struct
 typedef struct PCB {
@@ -51,10 +61,12 @@ void incrementClock(Clock *clock_ptr) {
 		}
 }	
 
-void printPCB(PCB *processTable) { 
-	printf("\tProcess Table:\n"); 
+void printPCB(PCB *processTable, Clock *clock_ptr) { 
+	printf("OSS PID:%d SysClockS: %d SysClockNano: %d\n", getpid(), clock_ptr->seconds, clock_ptr->nanoseconds); 
+	printf("Process Table: \n");
+	printf("%-3s %-7s %-7s %-5s %-5s\n", "Entry", "Occupied", "PID", "StartS", "StartN"); 
 	for (int i = 0; i < 20; i++) { 
-		printf("Entry %d: Occupied=%d, PID=%d, StartS=%d, StartN=%d\n", i, 
+		printf("%-3d %-8d %-8d %-5d %-5d\n", i, 
                processTable[i].occupied,
                processTable[i].pid,
                processTable[i].startSeconds,
@@ -88,6 +100,25 @@ int main(int argc, char **argv) {
 	// Testing shared memory and initialization
 	//printf("Clock Initialized. Time: %d seconds and %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds); 
 
+	// Set up my message queue  
+	msgbuffer buf0, buf1; 
+	int msgid; 
+	key_t msgkey; 
+	system("touch msgq.txt"); 
+	
+	// get key for our message queue 
+	if ((msgkey = ftok("msgq.txt", 1)) == -1) { 
+		perror("ftok"); 
+		exit(1); 
+	}
+
+	// create message queue: 
+	if ((msgid = msgget(msgkey, PERMS | IPC_CREAT)) == -1) { 
+		perror("msgget in parent"); 
+		exit(1); 
+	}
+	
+	printf("Message queue sucessfully set up\n"); 
 
 	// Command line arguments: 
 	int opt;
@@ -163,8 +194,7 @@ int main(int argc, char **argv) {
 			} else { 
 				num_processes++; // increments total child processes currently running
 				total_processes++; // increments total child processes created
-				printf("Child process created: %d\n", pid); 
-				
+				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);	
 
 				// Find empty spot in table 
 				int i; 
@@ -183,7 +213,7 @@ int main(int argc, char **argv) {
 					printf("Process added to PCB - %d\n", pid);
 
 					// Display table 
-					printPCB(processTable);  
+					printPCB(processTable, clock_ptr);  
 				} 
 			}
 				 int status;
@@ -192,6 +222,7 @@ int main(int argc, char **argv) {
                         if (WIFEXITED(status)) {
                             printf("Child with PID %d exited with status %d\n", wpid, WEXITSTATUS(status));
                             num_processes--; // decrement the number of running processes
+							printf("Process terminated: %d. Running processes: %d.\n", wpid, num_processes);
                     }
                 }
 

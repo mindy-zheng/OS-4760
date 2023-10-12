@@ -8,6 +8,16 @@
 #include <sys/shm.h>
 #include <time.h>
 #include <stdbool.h>
+#include <sys/msg.h>
+
+// Message queue struct
+typedef struct msgbuffer {
+    long mtype;
+    char strData[100];
+    int intData;
+} msgbuffer;
+
+#define PERMS 0644
 
 //Clock Struct 
 typedef struct Clock { 
@@ -30,6 +40,26 @@ int main(int argc, char** argv) {
 		fprintf(stderr, "Shared memory attach failed\n"); 
 		exit(1); 
 	} 
+	
+	msgbuffer buf; 
+	buf.mtype = 1; 
+	int msgid = 0; 
+	key_t msgkey; 
+
+	// Get a key for our message queue 
+	if ((msgkey = ftok("msgq.txt", 1)) == -1) {
+		perror("ftok");
+        exit(1);
+    } 
+	// Create message queue 
+	if ((msgid = msgget(msgkey, PERMS)) == -1) {
+		perror("msgget in child");
+		exit(1);
+	}
+
+	
+	printf("Child %d has access to the queue\n",getpid());
+	
 
 //	printf("Seconds: %s, Nanoseconds: %s\n", argv[1], argv[2]); // Making sure exec works 
 	int t_seconds = atoi(argv[1]);
