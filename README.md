@@ -16,5 +16,6 @@ LOG:
 Goals: Next, I need to create a message buffer system that will send and recieve messages and terminate accordingly. This can take the next full day.    
   
 10/11 - I was running into a problem where I thought the condition I implemented for the children to terminate wasn't working. I spent a while figuring out what was happening before I realized.. I included a print statement in my increment clock function to see if it was incrementing the values correctly and never removed it. 
+I have created a function to displ ay the PCB table. So right now, I have the general essence of project 2 finished. Now, I have to conquer the message queue thing. So I'm going to remove the condition in my worker process that terminates the program when the termination time is finished. I need to create the message queeu in my oss, send a message from my oss, recieve the message in my worker, check the clock, respond, and then recieve messages in my oss. 
 
-Now that I have that fixed, I am really happy where I am. 
+
