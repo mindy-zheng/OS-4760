@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 	// Initialize shared memory space
 	int shm_id = shmget(SH_KEY, sizeof(Clock), 0666); 
 	if (shm_id <= 0) { 
-		fprintf(stderr, "Shared memory get failed\n"); 
+		fprintf(stderr, "Worker: Shared memory get failed\n"); 
 		exit(1); 
 	} 
 	// Worker: checks clock periodically to terminate or continue
@@ -41,17 +41,17 @@ int main(int argc, char** argv) {
 	} 
 	
 	msgbuffer buf; 
-	buf.mtype = 1;  
-	int msgid = 0; 
+	buf.mtype = getpid();  
+	int msgqid = 0; 
 	key_t msgkey; 
 
 	// Get a key for our message queue 
 	if ((msgkey = ftok("msgq.txt", 1)) == -1) {
-		perror("ftok");
+		perror("ftok failure");
         exit(1);
     } 
-	// Create message queue 
-	if ((msgid = msgget(msgkey, PERMS)) == -1) {
+	// Access existing queue 
+	if ((msgqid = msgget(msgkey, PERMS)) == -1) {
 		perror("msgget in child");
 		exit(1);
 	}
@@ -67,13 +67,7 @@ int main(int argc, char** argv) {
 	int elapsed_seconds = 0;  
 	int start_seconds = clock_ptr -> seconds; 
 
-	while (1) { 
-		printf("WORKER: About to receive a message from parent %d.\n", getpid());  // Print statement before msgrcv() 
-		if (msgrcv(msgid, &buf, sizeof(msgbuffer), getpid(), 0) == -1) { 
-			perror("msgrcv failure"); 
-			exit(1); 
-		} 
-	    printf("Child %d has recieved message: %d\n", getpid(), buf.intData);
+	while (true) { 
 		printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
 		printf("--Received message\n");
 		printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
@@ -85,16 +79,19 @@ int main(int argc, char** argv) {
 			break; 
 		} else { 
 			buf.intData = 1; 
-			printf("Continuing...\n");  
+			//printf("Continuing...\n");  
 		}  
 
 		buf.mtype = getppid(); // send Parent PID
-		printf("About to send a message to parent %ld.\n", buf.mtype); 
-    	if (msgsnd(msgid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) {
-        	perror("msgsnd");
-        	exit(1);
-    	} 
-		printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
+		if (msgsnd(msgqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) { 
+			perror("msgsnd"); 
+			exit(1); 
+		}
+		 //printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
+		if (buf.intData == 0) {
+        	break; // Exit the loop if the process is terminating
+   	 	}
+
 
 		if (clock_ptr->seconds - start_seconds > elapsed_seconds) {
         	elapsed_seconds = clock_ptr->seconds - start_seconds;

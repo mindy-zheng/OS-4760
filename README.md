@@ -39,3 +39,5 @@ Successfully sent message to parent 3345380.
 Prepping to receive a message from child 3345386.
 ^C
 
+10/12 Okay, I've fixed the problem. 
+I had a variable being decremented when it shouldn't have been; I believe it was the total number of processes.. My message queue functionalitys were messed up. Even though it was successful in setting up, I had the logic of it wrong and not fleshed out. 

@@ -65,7 +65,7 @@ void printPCB(PCB *processTable, Clock *clock_ptr) {
 	printf("Process Table: \n");
 	printf("%-3s %-7s %-7s %-5s %-5s\n", "Entry", "Occupied", "PID", "StartS", "StartN"); 
 	for (int i = 0; i < 20; i++) { 
-		printf("%-3d %-8d %-8d %-5d %-5d\n", i, 
+		printf("%-3d %-9d %-9d %-5d %-5d\n", i, 
                processTable[i].occupied,
                processTable[i].pid,
                processTable[i].startSeconds,
@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
 	// Start with initializing shared memory space 
 	int shm_id = shmget(SH_KEY, sizeof(Clock), IPC_CREAT | 0666); 
 	if (shm_id <= 0) { 
-		fprintf(stderr, "Shared memory get failed\n"); 
+		fprintf(stderr, "OSS: shared memory get failed\n"); 
 		exit(1); 
 	} 
 	
@@ -103,9 +103,10 @@ int main(int argc, char **argv) {
 	// Testing shared memory and initialization
 	//printf("Clock Initialized. Time: %d seconds and %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds); 
 
+
 	// Set up my message queue  
 	msgbuffer buf; 
-	int msgid; 
+	int msqid; 
 	key_t msgkey; 
 	system("touch msgq.txt"); 
 
@@ -116,7 +117,7 @@ int main(int argc, char **argv) {
 	}
 
 	// create message queue:
-	if ((msgid = msgget(msgkey, PERMS | IPC_CREAT)) == -1) { 
+	if ((msqid = msgget(msgkey, PERMS | IPC_CREAT)) == -1) { 
 			perror("msgget in parent"); 
 			exit(1); 
 	}
@@ -161,12 +162,10 @@ int main(int argc, char **argv) {
 	sprintf(str_nanoseconds, "%d", random_nanoseconds); 
 
 	// printf("Timelimit: 1 to %d, random generated num: %d\n", timelimit, printf("Timelimit: 1 to %d, random generated num: %d\n", ti); 
-	// printf("Timelimit: 1 to %d, random generated num: %d\n",  random_t);
 
 	// Testing command parse options
 	//printf("Processes = %d, simultaneous processes = %d, timelimit = %d, logfile = %s\n", processes, simul, timelimit, logfile);
 	
-
 
 	// Creating child processes in accordance to command arguments 
 	int num_processes = 0; // number of child processes running 
@@ -185,9 +184,8 @@ int main(int argc, char **argv) {
         pid_t wpid;
         while ((wpid = waitpid(-1, &status, WNOHANG)) > 0) {
         	if (WIFEXITED(status)) {
-                printf("Child with PID %d exited with status %d\n", wpid, WEXITSTATUS(status));
+                printf("Child with PID %d terminated with status %d\n", wpid, WEXITSTATUS(status));
             	num_processes--; // decrement the number of running processe
-				total_processes++;
                 printf("Process terminated: %d. Running processes: %d.\n", wpid, num_processes);
             	
 				int i; 
@@ -198,14 +196,13 @@ int main(int argc, char **argv) {
 					} 
 
 				}
-
+				printPCB(processTable, clock_ptr); 
 			}
         }
 		if (num_processes < max_simul) {
-			printf("Prepping to fork...\n"); // debug statement  
 			pid_t pid = fork(); // create child process 
 
-			if (pid == -1) {
+			if (pid < 0) {
 				fprintf(stderr, "Forking failure"); 
 				exit(EXIT_FAILURE); 
 			}
@@ -219,63 +216,61 @@ int main(int argc, char **argv) {
 			} else { 
 				num_processes++; // increments total child processes currently running
 				total_processes++; // increments total child processes created
-				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);	
+				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);
 
-				// Sending message to worker after child creation 
-				buf.mtype = pid; 
-				buf.intData = 1;
+					
 
-				printf("About to send a message to child %d.\n", pid);
-				
-				if (msgsnd(msgid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) 		{
-        			perror("msgsnd error");
-        			exit(1);
+				if (msgrcv(msqid, &buf, sizeof(buf), 0, IPC_NOWAIT) != -1) {
+        			printf("OSS sucessfully received message %d from worker: %ld\n", buf.intData, buf.mtype);
+				for (int i = 0; i < 20; i++) {
+        			if (!processTable[i].occupied) {
+            			processTable[i].occupied = 1;
+            			processTable[i].pid = pid;
+            			processTable[i].startSeconds = clock_ptr->seconds;
+            			processTable[i].startNano = clock_ptr->nanoseconds;
+            			break;
+       				}
     			}
-				// Testing message send function 
-				printf("OSS send message %d to child: %d\n", buf.intData, pid);  
-				sleep(2); 
-				printf("Prepping to receive a message from child %d.\n", pid);
-				if (msgrcv(msgid, &buf, sizeof(msgbuffer), pid, 0) == -1) {
-    				perror("msgrcv error");
-    				exit(1);
-				}	
 
-				printf("OSS received message %d from child: %d\n", buf.intData, pid);
 
-				// Find empty spot in table 
+				// Find process in the table:
 				int i; 
 				for (i = 0; i < 20; i++) {
-					if (!processTable[i].occupied) {
+					if (processTable[i].occupied && processTable[i].pid == buf.mtype) {
 						break; 
 					}
 				}
 				
-				// Add processes to table: 
+				// Update process to table: 
 				if (i < 20) { 
-					processTable[i].occupied = 1; 
-					processTable[i].pid = pid;
-					processTable[i].startSeconds = clock_ptr-> seconds;
-					processTable[i].startNano = clock_ptr-> nanoseconds; 
-					printf("Process added to PCB - %d\n", pid);
-
-					// Display table 
-					printPCB(processTable, clock_ptr);  
-				} else {
-					printf("Not spot found in table.\n");
-				}  
+					if (buf.intData == 0) { 
+						// Process terminated 
+						processTable[i].occupied = 0; 
+						printf("Process removed from PCB - %ld\n", buf.mtype); 
+					} else {
+						// Process running
+						printf("Process still running -%ld\n", buf.mtype);  
+						processTable[i].startSeconds = clock_ptr->seconds; 
+						processTable[i].startNano = clock_ptr-> nanoseconds; 
+					}	
+				printf("The process table should be printing below this..."); 
+				printPCB(processTable, clock_ptr);
+ 
+				} else { 
+					printf("No spot on the table.\n"); 
+				}   
 			
 			}
-
-
+		}
+	
 		}
 	}
 
 
-	/* get rid of message queue
-	if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
 		perror("msgctl to get rid of queue in parent failed");
 		exit(1);
-	} */ 
+	} 
 
 
 	// Detatch from shared memory 
@@ -290,4 +285,4 @@ int main(int argc, char **argv) {
 
 	return 0; 
 } 
-#include <stdio.h>
+
