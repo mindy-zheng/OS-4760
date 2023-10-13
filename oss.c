@@ -16,7 +16,7 @@ typedef struct msgbuffer {
 	int intData; 
 } msgbuffer; 
 
-#define PERMS 0644
+#define PERMS 0666
 
 // Process Control Block struct
 typedef struct PCB {
@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
 			exit(1); 
 	}
 
-	//	printf("Message queue sucessfully set up\n"); 
+		printf("Message queue sucessfully set up\n"); 
 
 	// Command line arguments: 
 	int opt;

@@ -16,7 +16,7 @@ typedef struct msgbuffer {
     int intData;
 } msgbuffer;
 
-#define PERMS 0644
+#define PERMS 0666
 
 //Clock Struct 
 typedef struct Clock { 
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 	
 	msgbuffer buf; 
 	buf.mtype = getpid();  
-	int msgqid = 0; 
+	int msqid = 0; 
 	key_t msgkey; 
 
 	// Get a key for our message queue 
@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
         exit(1);
     } 
 	// Access existing queue 
-	if ((msgqid = msgget(msgkey, PERMS)) == -1) {
+	if ((msqid = msgget(msgkey, PERMS)) == -1) {
 		perror("msgget in child");
 		exit(1);
 	}
@@ -83,8 +83,8 @@ int main(int argc, char** argv) {
 		}  
 
 		buf.mtype = getppid(); // send Parent PID
-		if (msgsnd(msgqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) { 
-			perror("msgsnd"); 
+		if (msgsnd(msqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) { 
+			fprintf(stderr, "Failure to send message"); 
 			exit(1); 
 		}
 		 //printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
