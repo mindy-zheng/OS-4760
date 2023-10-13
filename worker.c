@@ -68,9 +68,13 @@ int main(int argc, char** argv) {
 	int elapsed_seconds = 0;  
 	int start_seconds = clock_ptr -> seconds; 
 
-	while (true) { 
 		printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
-		printf("--Received message\n");
+        printf("--Received message\n");
+
+
+	while (true) { 
+		//printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
+		// printf("--Received message\n");
 		//printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
 		//printf("Termination time: %d seconds, %d nanoseconds\n", t_seconds, t_nanoseconds);
 		
