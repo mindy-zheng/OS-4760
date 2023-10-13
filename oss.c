@@ -46,7 +46,7 @@ void help() {
 		printf("-f [logfile]: where you should write the output of oss\n");
 }
 
-#define SH_KEY 203100 
+#define SH_KEY 203101
 #define ONE_SEC_IN_NANO 1000000000 // 1,000,000,000 nanoseconds = 1 second
 #define INCREMENT_NANO 10000000 // 100,000,000 nanoseconds = 0.1 second
 #define NANO_MAX 999999999 // for the upper bound in my random num generator 
@@ -65,7 +65,7 @@ void printPCB(PCB *processTable, Clock *clock_ptr) {
 	printf("Process Table: \n");
 	printf("%-3s %-7s %-7s %-5s %-5s\n", "Entry", "Occupied", "PID", "StartS", "StartN"); 
 	for (int i = 0; i < 20; i++) { 
-		printf("%-3d %-9d %-9d %-5d %-5d\n", i, 
+		printf("%-3d %-10d %-9d %-5d %-5d\n", i, 
                processTable[i].occupied,
                processTable[i].pid,
                processTable[i].startSeconds,
@@ -165,6 +165,13 @@ int main(int argc, char **argv) {
 
 	// Testing command parse options
 	//printf("Processes = %d, simultaneous processes = %d, timelimit = %d, logfile = %s\n", processes, simul, timelimit, logfile);
+
+	// Writing to logfile 
+	FILE *fp = fopen(logfile, "w"); 
+	if (fp == NULL) { 
+			fprintf(stderr, "Couldn't open file"); 
+			exit(EXIT_FAILURE); 	
+	} 
 	
 
 	// Creating child processes in accordance to command arguments 
@@ -174,6 +181,7 @@ int main(int argc, char **argv) {
 	int max_simul = simul; 
 	// loop to create ammount of child processes need and simultaneous processes 
 	while (total_processes < max_processes) { 
+		//fprintf(fp, "OSS: Sending message to worker %d PID %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
     	//printf("Beginning of while loop. Total processes: %d\n", total_processes);
 		incrementClock(clock_ptr); // Increment clock
 		//printf("Clcok has been incremented: %d seconds, %d nanoseconds\n", clock_ptr-> seconds, clock_ptr->nanoseconds); // Debug statement to see if the clock is incrementing correctly
@@ -218,12 +226,10 @@ int main(int argc, char **argv) {
 				total_processes++; // increments total child processes created
 				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);
 
-					
-
-				if (msgrcv(msqid, &buf, sizeof(buf), 0, IPC_NOWAIT) != -1) {
-        			printf("OSS sucessfully received message %d from worker: %ld\n", buf.intData, buf.mtype);
+        			//printf("OSS sucessfully received message %d from worker: %ld\n", buf.intData, buf.mtype);
 				for (int i = 0; i < 20; i++) {
         			if (!processTable[i].occupied) {
+						fprintf(fp, "OSS: Sending message %d to worker %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
             			processTable[i].occupied = 1;
             			processTable[i].pid = pid;
             			processTable[i].startSeconds = clock_ptr->seconds;
@@ -231,8 +237,13 @@ int main(int argc, char **argv) {
             			break;
        				}
     			}
+		 		if (msgrcv(msqid, &buf, sizeof(buf), 0, IPC_NOWAIT) != -1) {
+                    fprintf(fp, "OSS: Recieved message %d from worker: %ld at time %d: %d\n", buf.intData, buf.mtype, clock_ptr-> seconds, clock_ptr->nanoseconds);
 
-
+				if (buf.intData == 0) { 
+					fprintf(fp, "OSS: Worker %ld PID %d is planning to terminate.\n", buf.mtype, pid);
+				}
+				
 				// Find process in the table:
 				int i; 
 				for (i = 0; i < 20; i++) {
@@ -256,9 +267,9 @@ int main(int argc, char **argv) {
 				printf("The process table should be printing below this..."); 
 				printPCB(processTable, clock_ptr);
  
-				} else { 
-					printf("No spot on the table.\n"); 
-				}   
+				} //else { 
+				//	printf("=============.\n"); 
+				//}   
 			
 			}
 		}

@@ -9,6 +9,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <sys/msg.h>
+#include <signal.h> 
 
 // Message queue struct
 typedef struct msgbuffer {
@@ -24,7 +25,7 @@ typedef struct Clock {
 	int nanoseconds; 
 } Clock; 
 
-#define SH_KEY 203100
+#define SH_KEY 203101
 
 int main(int argc, char** argv) { 
 	// Initialize shared memory space
@@ -70,8 +71,8 @@ int main(int argc, char** argv) {
 	while (true) { 
 		printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
 		printf("--Received message\n");
-		printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
-		printf("Termination time: %d seconds, %d nanoseconds\n", t_seconds, t_nanoseconds);
+		//printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
+		//printf("Termination time: %d seconds, %d nanoseconds\n", t_seconds, t_nanoseconds);
 		
 		if (clock_ptr->seconds > t_seconds || (clock_ptr->seconds== t_seconds && clock_ptr->nanoseconds >= t_nanoseconds)) { 
 			buf.intData = 0; 

@@ -41,3 +41,11 @@ Prepping to receive a message from child 3345386.
 
 10/12 Okay, I've fixed the problem. 
 I had a variable being decremented when it shouldn't have been; I believe it was the total number of processes.. My message queue functionalitys were messed up. Even though it was successful in setting up, I had the logic of it wrong and not fleshed out. 
+
+
+10/12 night - So, I currently have implemented a common C I/O for wriitng into a logfile. It seems to be printing out messages fine, with the exception of a few errors. This is where i'll pick up on tomorrow. 
+
+1. I keep getting a shared memory get failed messsage, which I'm very unsure of . 
+2. I also need to monitor the logfile more closely. I didn't get a "terminating" line in my log file. I might need to implement this writing in the log in my WAITPID function. 
+3. I need to implement a signal to kill all processes and free up memory after 60 seconds. 
+4. I still need to find a way to print the PCB table every .5 seconds.  
