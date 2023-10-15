@@ -48,4 +48,8 @@ I had a variable being decremented when it shouldn't have been; I believe it was
 1. I keep getting a shared memory get failed messsage, which I'm very unsure of . 
 2. I also need to monitor the logfile more closely. I didn't get a "terminating" line in my log file. I might need to implement this writing in the log in my WAITPID function. 
 3. I need to implement a signal to kill all processes and free up memory after 60 seconds. 
-4. I still need to find a way to print the PCB table every .5 seconds.  
+4. I still need to find a way to print the PCB table every .5 seconds. 
+
+10/13 - 
+After debugging more, I found that my message queue is being removed before all the worker processes have finishing sending their messages. Figured this out when suddenly started getting error messages: "failure to send message:invalid argument" errors. So I need to modify and wait for termination message... 
+ 

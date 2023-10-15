@@ -35,11 +35,17 @@ int main(int argc, char** argv) {
 		exit(1); 
 	} 
 	// Worker: checks clock periodically to terminate or continue
-	Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
+	Clock *clock_ptr = (struct Clock*) shmat(shm_id, NULL, 0);
+	if (clock_ptr == (void *) -1) {
+   		perror("Worker: Shared memory attach failed");
+   		exit(1);
+	}
+
+	/*Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
 	if (clock_ptr <= 0) { 
 		fprintf(stderr, "Shared memory attach failed\n"); 
 		exit(1); 
-	} 
+	} */ 
 	
 	msgbuffer buf; 
 	buf.mtype = getpid();  
@@ -81,19 +87,24 @@ int main(int argc, char** argv) {
 		if (clock_ptr->seconds > t_seconds || (clock_ptr->seconds== t_seconds && clock_ptr->nanoseconds >= t_nanoseconds)) { 
 			buf.intData = 0; 
 			printf("Terminating....\n"); 
-			break; 
+			//break; 
 		} else { 
 			buf.intData = 1; 
-			//printf("Continuing...\n");  
+			printf("Continuing...\n");  
 		}  
 
+		printf("Sending message with %d to parent.\n", buf.intData); // debug
+
 		buf.mtype = getppid(); // send Parent PID
-		if (msgsnd(msqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) { 
-			fprintf(stderr, "Failure to send message"); 
+		if (msgsnd(msqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) {			
+			int errsv = errno; 
+			printf("Errno: %d\n", errsv);  
+			perror("Failure to send message"); 
 			exit(1); 
 		}
-		 //printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
+		printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
 		if (buf.intData == 0) {
+			printf("Sending 0 to terminate child"); 
         	break; // Exit the loop if the process is terminating
    	 	}
 

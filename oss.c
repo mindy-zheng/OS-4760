@@ -88,14 +88,21 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "OSS: shared memory get failed\n"); 
 		exit(1); 
 	} 
+
+	Clock *clock_ptr = (struct Clock*) shmat(shm_id, NULL, 0);
+	if (clock_ptr == (void *) -1) {
+    	perror("OSS: Shared memory attach failed");
+    	exit(1);
+	}
+
 	
 	//Attach Clock struct to shared memory 
 	// oss: increments clock; worker: checks clock periodically
-	Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
+	/* Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
 	if (clock_ptr <= 0) { 
 		fprintf(stderr, "Shared memory attach failed\n"); 
 		exit(1); 
-	} 
+	} */ 
 	
 	// Initializing clock 
 	clock_ptr -> seconds = 0; 
@@ -195,7 +202,7 @@ int main(int argc, char **argv) {
                 printf("Child with PID %d terminated with status %d\n", wpid, WEXITSTATUS(status));
             	num_processes--; // decrement the number of running processe
                 printf("Process terminated: %d. Running processes: %d.\n", wpid, num_processes);
-            	
+                printf("Unassigning process: %d on PCB table\n", wpid); 	
 				int i; 
 				for (i = 0; i < 20; i++) { 
 					if (processTable[i].occupied && processTable[i].pid == wpid) { 
@@ -225,8 +232,7 @@ int main(int argc, char **argv) {
 				num_processes++; // increments total child processes currently running
 				total_processes++; // increments total child processes created
 				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);
-
-        			//printf("OSS sucessfully received message %d from worker: %ld\n", buf.intData, buf.mtype);
+        		printf("Assigning PID %d .....\n", pid); 
 				for (int i = 0; i < 20; i++) {
         			if (!processTable[i].occupied) {
 						fprintf(fp, "OSS: Sending message %d to worker %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
@@ -237,12 +243,33 @@ int main(int argc, char **argv) {
             			break;
        				}
     			}
-		 		if (msgrcv(msqid, &buf, sizeof(buf), 0, IPC_NOWAIT) != -1) {
-                    fprintf(fp, "OSS: Recieved message %d from worker: %ld at time %d: %d\n", buf.intData, buf.mtype, clock_ptr-> seconds, clock_ptr->nanoseconds);
 
-				if (buf.intData == 0) { 
-					fprintf(fp, "OSS: Worker %ld PID %d is planning to terminate.\n", buf.mtype, pid);
+				// Error handling with msgrcv 
+				//	ssize_t result = msgrcv(msqid, &buf, sizeof(msgbuffer), 0, 0);
+				/* if (result == -1) {
+    				perror("Message recieve failed"); 	
+				} else {
+    				 fprintf(fp, "OSS: Recieved message %d from worker: %ld at time %d: %d\n", buf.intData, buf.mtype, clock_ptr-> seconds, clock_ptr->nanoseconds);
+				}*/ 
+				
+				for (int i = 0; i < num_processes; i++) { 
+					msgrcv(msqid, &buf, sizeof(msgbuffer), 0, 0); 
+					if (buf.intData == 0) {
+						printf("Recieved termination message from worker: %ld\n", buf.mtype);
+						num_processes--;
+					}
 				}
+
+
+				/*if (buf.intData == 0) {
+                    fprintf(fp, "OSS: Worker %ld PID %d is planning to terminate.\n", buf.mtype, pid);
+                    num_processes--; ;
+                } */ 
+				if (num_processes == 0) { 
+					printf("All children processes have been terminated.\n"); 
+					break;
+				} 
+
 				
 				// Find process in the table:
 				int i; 
@@ -251,7 +278,7 @@ int main(int argc, char **argv) {
 						break; 
 					}
 				}
-				
+				printf("Updating process table: %d...\n", pid); 
 				// Update process to table: 
 				if (i < 20) { 
 					if (buf.intData == 0) { 
@@ -264,24 +291,19 @@ int main(int argc, char **argv) {
 						processTable[i].startSeconds = clock_ptr->seconds; 
 						processTable[i].startNano = clock_ptr-> nanoseconds; 
 					}	
-				printf("The process table should be printing below this..."); 
 				printPCB(processTable, clock_ptr);
- 
-				} //else { 
-				//	printf("=============.\n"); 
-				//}   
-			
-			}
+			} 
+		}	
 		}
-	
-		}
-	}
+}	
 
-
+	//Testing to see if msg queue has been removed, resulting in error 	
+	printf("Removing message queue after this line \n"); 
 	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
 		perror("msgctl to get rid of queue in parent failed");
 		exit(1);
 	} 
+	printf("Message queue removed \n"); 
 
 
 	// Detatch from shared memory 
