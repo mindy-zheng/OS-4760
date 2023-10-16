@@ -16,7 +16,7 @@ typedef struct msgbuffer {
 	int intData; 
 } msgbuffer; 
 
-#define PERMS 0666
+#define PERMS 0666 
 
 // Process Control Block struct
 typedef struct PCB {
@@ -95,14 +95,6 @@ int main(int argc, char **argv) {
     	exit(1);
 	}
 
-	
-	//Attach Clock struct to shared memory 
-	// oss: increments clock; worker: checks clock periodically
-	/* Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
-	if (clock_ptr <= 0) { 
-		fprintf(stderr, "Shared memory attach failed\n"); 
-		exit(1); 
-	} */ 
 	
 	// Initializing clock 
 	clock_ptr -> seconds = 0; 
@@ -185,11 +177,12 @@ int main(int argc, char **argv) {
 	int num_processes = 0; // number of child processes running 
 	int total_processes = 0; // total child processes created 
 	int max_processes = processes; 
-	int max_simul = simul; 
+	int max_simul = simul;
+	bool assigned = false;  // ensure no duplicate PID assignment
+	int last_assigned = 0;  
 	// loop to create ammount of child processes need and simultaneous processes 
-	while (total_processes < max_processes) { 
+	while (total_processes <= max_processes) { 
 		//fprintf(fp, "OSS: Sending message to worker %d PID %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
-    	//printf("Beginning of while loop. Total processes: %d\n", total_processes);
 		incrementClock(clock_ptr); // Increment clock
 		//printf("Clcok has been incremented: %d seconds, %d nanoseconds\n", clock_ptr-> seconds, clock_ptr->nanoseconds); // Debug statement to see if the clock is incrementing correctly
 
@@ -214,6 +207,7 @@ int main(int argc, char **argv) {
 				printPCB(processTable, clock_ptr); 
 			}
         }
+
 		if (num_processes < max_simul) {
 			pid_t pid = fork(); // create child process 
 
@@ -233,38 +227,31 @@ int main(int argc, char **argv) {
 				total_processes++; // increments total child processes created
 				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);
         		printf("Assigning PID %d .....\n", pid); 
-				for (int i = 0; i < 20; i++) {
+				for (int i = last_assigned; i < 20; i++) {
         			if (!processTable[i].occupied) {
-						fprintf(fp, "OSS: Sending message %d to worker %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
+						//fprintf(fp, "OSS: Sending message %d to worker %d at time %d:%d\n", buf.intData, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
             			processTable[i].occupied = 1;
             			processTable[i].pid = pid;
             			processTable[i].startSeconds = clock_ptr->seconds;
             			processTable[i].startNano = clock_ptr->nanoseconds;
-            			break;
+						last_assigned = i; 
+						assigned = true; 
+						break; 
        				}
     			}
-
-				// Error handling with msgrcv 
-				//	ssize_t result = msgrcv(msqid, &buf, sizeof(msgbuffer), 0, 0);
-				/* if (result == -1) {
-    				perror("Message recieve failed"); 	
-				} else {
-    				 fprintf(fp, "OSS: Recieved message %d from worker: %ld at time %d: %d\n", buf.intData, buf.mtype, clock_ptr-> seconds, clock_ptr->nanoseconds);
-				}*/ 
-				
-				for (int i = 0; i < num_processes; i++) { 
-					msgrcv(msqid, &buf, sizeof(msgbuffer), 0, 0); 
-					if (buf.intData == 0) {
-						printf("Recieved termination message from worker: %ld\n", buf.mtype);
-						num_processes--;
+		}
+				// Check for messages 
+			
+				for (int i = 0; i < num_processes; i++) {
+   				msgrcv(msqid, &buf, sizeof(msgbuffer)- sizeof(long), 0, 0); 
+						if (buf.intData == 0) {
+							printf("Recieved termination message from worker: %ld\n", buf.mtype);
+							num_processes--;
+						} else {
+							fprintf(fp, "OSS: Received message from worker %d PID %ld at time %d:%d\n", i, buf.mtype, clock_ptr->seconds, clock_ptr->nanoseconds); 
+						}
 					}
-				}
 
-
-				/*if (buf.intData == 0) {
-                    fprintf(fp, "OSS: Worker %ld PID %d is planning to terminate.\n", buf.mtype, pid);
-                    num_processes--; ;
-                } */ 
 				if (num_processes == 0) { 
 					printf("All children processes have been terminated.\n"); 
 					break;
@@ -284,7 +271,8 @@ int main(int argc, char **argv) {
 					if (buf.intData == 0) { 
 						// Process terminated 
 						processTable[i].occupied = 0; 
-						printf("Process removed from PCB - %ld\n", buf.mtype); 
+						printf("Process removed from PCB - %ld\n", buf.mtype);
+					
 					} else {
 						// Process running
 						printf("Process still running -%ld\n", buf.mtype);  
@@ -295,27 +283,55 @@ int main(int argc, char **argv) {
 			} 
 		}	
 		}
-}	
 
+if (num_processes == 0) {
+	printf("Removing message queue after this line \n");
+	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+        perror("msgctl to get rid of queue in parent failed");
+        exit(1);
+    }
+	printf("Message queue removed \n");
+
+	printf("Detatching from shared memory after this line\n");
+    if (shmdt(clock_ptr) == -1) {
+        fprintf(stderr, "Detatching memory failed\n");
+        exit(1);
+    }
+	
+    printf("Shared memory detached\n");
+    shmctl(shm_id, IPC_RMID, NULL);
+    printf("Freeing shared memory segment\n");
+}
+
+fclose(fp); 
+
+/*
 	//Testing to see if msg queue has been removed, resulting in error 	
 	printf("Removing message queue after this line \n"); 
+	if (num_processes == 0) { 
 	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
 		perror("msgctl to get rid of queue in parent failed");
 		exit(1);
 	} 
+}
 	printf("Message queue removed \n"); 
 
-
+	
+	printf("Detatching from shared memory after this line\n");
+	if (num_processes == 0) { 
 	// Detatch from shared memory 
 	if (shmdt(clock_ptr) == -1) { 
 		fprintf(stderr, "Detatching memory failed\n"); 
 		exit(1); 
 	}
+}
+	printf("Shared memory detached\n"); 
 
 	// Free shared memory segment 
 	shmctl(shm_id, IPC_RMID, NULL); 
-
-
+	printf("Freeing shared memory segment\n"); 
+*/
+	
 	return 0; 
 } 
 

@@ -50,6 +50,12 @@ I had a variable being decremented when it shouldn't have been; I believe it was
 3. I need to implement a signal to kill all processes and free up memory after 60 seconds. 
 4. I still need to find a way to print the PCB table every .5 seconds. 
 
-10/13 - 
-After debugging more, I found that my message queue is being removed before all the worker processes have finishing sending their messages. Figured this out when suddenly started getting error messages: "failure to send message:invalid argument" errors. So I need to modify and wait for termination message... 
- 
+10/13 & 10/14 - 
+After debugging more, I found that my message queue is being removed before all the worker processes have finishing sending their messages. Figured this out when suddenly started getting error messages: "failure to send message:invalid argument" errors.
+
+I added a loop that would make ensure a message to be recieved by each process that is running. I need to find a way to log within the logfile if a process plans to terminate. 
+
+I realized this was also a problem with my shared memory - detaching before all the children were finished terminating. 
+
+Running into a problem now with writing into my log. 
+

@@ -27,11 +27,11 @@ typedef struct Clock {
 
 #define SH_KEY 203101
 
-int main(int argc, char** argv) { 
+int main(int argc, char** argv) {
 	// Initialize shared memory space
 	int shm_id = shmget(SH_KEY, sizeof(Clock), 0666); 
-	if (shm_id <= 0) { 
-		fprintf(stderr, "Worker: Shared memory get failed\n"); 
+	if (shm_id <= 0) {
+		perror("Worker: Shared memory get failed");  
 		exit(1); 
 	} 
 	// Worker: checks clock periodically to terminate or continue
@@ -41,11 +41,6 @@ int main(int argc, char** argv) {
    		exit(1);
 	}
 
-	/*Clock *clock_ptr = (Clock*) shmat(shm_id, NULL, 0); 
-	if (clock_ptr <= 0) { 
-		fprintf(stderr, "Shared memory attach failed\n"); 
-		exit(1); 
-	} */ 
 	
 	msgbuffer buf; 
 	buf.mtype = getpid();  
@@ -74,35 +69,27 @@ int main(int argc, char** argv) {
 	int elapsed_seconds = 0;  
 	int start_seconds = clock_ptr -> seconds; 
 
-		printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
-        printf("--Received message\n");
+	printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
+    printf("--Received message\n");
 
 
 	while (true) { 
-		//printf("WORKER PID:%d PPID:%d Called with oss: TermTimeS: %d TermTimeNano: %d\n", getpid(), getppid(), t_seconds, t_nanoseconds);
-		// printf("--Received message\n");
-		//printf("Current time: %d seconds, %d nanoseconds\n", clock_ptr->seconds, clock_ptr->nanoseconds);
-		//printf("Termination time: %d seconds, %d nanoseconds\n", t_seconds, t_nanoseconds);
-		
 		if (clock_ptr->seconds > t_seconds || (clock_ptr->seconds== t_seconds && clock_ptr->nanoseconds >= t_nanoseconds)) { 
 			buf.intData = 0; 
-			printf("Terminating....\n"); 
-			//break; 
+			// printf("Terminating....\n");
 		} else { 
 			buf.intData = 1; 
-			printf("Continuing...\n");  
+			//	printf("Continuing...\n");  
 		}  
 
-		printf("Sending message with %d to parent.\n", buf.intData); // debug
+		//printf("Sending message with %d to parent.\n", buf.intData); // debug
 
-		buf.mtype = getppid(); // send Parent PID
+		buf.mtype = getppid(); 
 		if (msgsnd(msqid, &buf, sizeof(msgbuffer) - sizeof(long), 0) == -1) {			
-			int errsv = errno; 
-			printf("Errno: %d\n", errsv);  
 			perror("Failure to send message"); 
 			exit(1); 
 		}
-		printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
+		//printf("Successfully sent message to parent %ld.\n:", buf.mtype); // debugging statement
 		if (buf.intData == 0) {
 			printf("Sending 0 to terminate child"); 
         	break; // Exit the loop if the process is terminating
@@ -116,7 +103,7 @@ int main(int argc, char** argv) {
     	}
 	}
 	
-
+	printf("\nWORKER: detaching from shared mem space after this line\n"); 
 	//Detatching from shared memory space
 	if (shmdt(clock_ptr) == -1) { 
 		fprintf(stderr, "Detatching memory failed"); 
