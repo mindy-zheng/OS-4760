@@ -9,6 +9,8 @@
 #include <time.h>
 #include <stdbool.h>
 #include <sys/msg.h>
+#include <signal.h> 
+#include <sys/time.h> 
 
 // Message queue struct 
 typedef struct msgbuffer { 
@@ -81,7 +83,44 @@ int randomNum(int min, int max) {
 	}  
 } 
 
-int main(int argc, char **argv) { 
+// Implementing signal handling: SIGINT & SIGALRM 
+pid_t child_PID[200]; // Sotres child PID's, large number just in case  
+int num_of_child; 
+int shm_id; 
+void *clock_ptr;
+bool shm_detached = false; // flag indicating whether memory has been detached yet  
+
+void myhandler(int s) { 
+	for (int i = 0; i < num_of_child; i++) {
+		if (kill(child_PID[i], 0) != -1) {  
+			if (kill(child_PID[i], SIGKILL) == -1) { 
+				perror("Error killing all processes"); 
+		} 
+	}
+} 
+	if (!shm_detached) { 
+		printf("Detatching from shared memory after this line\n");
+    	// Detatch from shared memory
+    	if (shmdt(clock_ptr) == -1) {
+        	fprintf(stderr, "Detatching memory failed\n");
+        	exit(1);
+    	}
+		shm_detached = true; 
+		
+    	printf("Shared memory detached\n");
+    	// Free shared memory segment
+   		shmctl(shm_id, IPC_RMID, NULL);
+    	printf("Freeing shared memory segment\n"); 
+	}
+	exit(0); 
+}
+
+
+int main(int argc, char **argv) {
+	signal(SIGALRM, myhandler);
+    signal(SIGINT, myhandler);
+    alarm(60); // 60 real life seconds	
+		 
 	// Start with initializing shared memory space 
 	int shm_id = shmget(SH_KEY, sizeof(Clock), IPC_CREAT | 0666); 
 	if (shm_id <= 0) { 
@@ -94,7 +133,7 @@ int main(int argc, char **argv) {
     	perror("OSS: Shared memory attach failed");
     	exit(1);
 	}
-
+	
 	
 	// Initializing clock 
 	clock_ptr -> seconds = 0; 
@@ -181,9 +220,8 @@ int main(int argc, char **argv) {
 	bool assigned = false;  // ensure no duplicate PID assignment
 	int last_assigned = 0;  
 	// loop to create ammount of child processes need and simultaneous processes 
-	while (total_processes <= max_processes) { 
-		//fprintf(fp, "OSS: Sending message to worker %d PID %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr->nanoseconds);
-		incrementClock(clock_ptr); // Increment clock
+	while (total_processes < max_processes) { 
+		incrementClock(clock_ptr);
 		//printf("Clcok has been incremented: %d seconds, %d nanoseconds\n", clock_ptr-> seconds, clock_ptr->nanoseconds); // Debug statement to see if the clock is incrementing correctly
 
 
@@ -196,6 +234,7 @@ int main(int argc, char **argv) {
             	num_processes--; // decrement the number of running processe
                 printf("Process terminated: %d. Running processes: %d.\n", wpid, num_processes);
                 printf("Unassigning process: %d on PCB table\n", wpid); 	
+
 				int i; 
 				for (i = 0; i < 20; i++) { 
 					if (processTable[i].occupied && processTable[i].pid == wpid) { 
@@ -208,6 +247,7 @@ int main(int argc, char **argv) {
 			}
         }
 
+		// Forking and child creation 
 		if (num_processes < max_simul) {
 			pid_t pid = fork(); // create child process 
 
@@ -225,6 +265,7 @@ int main(int argc, char **argv) {
 			} else { 
 				num_processes++; // increments total child processes currently running
 				total_processes++; // increments total child processes created
+				child_PID[num_of_child++] = pid; // for signal handling
 				printf("Child process created: %d. Total processes: %d. Running processes: %d.\n", pid, total_processes, num_processes);
         		printf("Assigning PID %d .....\n", pid); 
 				for (int i = last_assigned; i < 20; i++) {
@@ -235,7 +276,8 @@ int main(int argc, char **argv) {
             			processTable[i].startSeconds = clock_ptr->seconds;
             			processTable[i].startNano = clock_ptr->nanoseconds;
 						last_assigned = i; 
-						assigned = true; 
+						assigned = true;
+						fprintf(fp, "OSS: Sending message to worker %d PID %d at time %d:%d\n", i, pid, clock_ptr->seconds, clock_ptr-> nanoseconds); 
 						break; 
        				}
     			}
@@ -243,12 +285,13 @@ int main(int argc, char **argv) {
 				// Check for messages 
 			
 				for (int i = 0; i < num_processes; i++) {
-   				msgrcv(msqid, &buf, sizeof(msgbuffer)- sizeof(long), 0, 0); 
+   					msgrcv(msqid, &buf, sizeof(msgbuffer)- sizeof(long), 0, 0); 
 						if (buf.intData == 0) {
-							printf("Recieved termination message from worker: %ld\n", buf.mtype);
+							fprintf(fp, "OSS: Recieved termination message from worker %ld at %d: %d\n", buf.mtype, clock_ptr->seconds, clock_ptr-> nanoseconds);	
+							fprintf(fp, "OSS: Planning to terminate worker %d PID %ld.\n", i, buf.mtype); 
 							num_processes--;
-						} else {
-							fprintf(fp, "OSS: Received message from worker %d PID %ld at time %d:%d\n", i, buf.mtype, clock_ptr->seconds, clock_ptr->nanoseconds); 
+						} else if (buf.intData == 1) {
+							fprintf(fp, "OSS: Received message to continue from worker PID %ld at time %d:%d\n",  buf.mtype, clock_ptr->seconds, clock_ptr->nanoseconds); 
 						}
 					}
 
@@ -283,8 +326,7 @@ int main(int argc, char **argv) {
 			} 
 		}	
 		}
-
-if (num_processes == 0) {
+if (num_processes == 0 && !shm_detached) {
 	printf("Removing message queue after this line \n");
 	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
         perror("msgctl to get rid of queue in parent failed");
@@ -301,36 +343,11 @@ if (num_processes == 0) {
     printf("Shared memory detached\n");
     shmctl(shm_id, IPC_RMID, NULL);
     printf("Freeing shared memory segment\n");
-}
+	
+	shm_detached = true; // indicate shared memory detached alr at end of prog
+} 
 
 fclose(fp); 
-
-/*
-	//Testing to see if msg queue has been removed, resulting in error 	
-	printf("Removing message queue after this line \n"); 
-	if (num_processes == 0) { 
-	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
-		perror("msgctl to get rid of queue in parent failed");
-		exit(1);
-	} 
-}
-	printf("Message queue removed \n"); 
-
-	
-	printf("Detatching from shared memory after this line\n");
-	if (num_processes == 0) { 
-	// Detatch from shared memory 
-	if (shmdt(clock_ptr) == -1) { 
-		fprintf(stderr, "Detatching memory failed\n"); 
-		exit(1); 
-	}
-}
-	printf("Shared memory detached\n"); 
-
-	// Free shared memory segment 
-	shmctl(shm_id, IPC_RMID, NULL); 
-	printf("Freeing shared memory segment\n"); 
-*/
 	
 	return 0; 
 } 
